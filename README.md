@@ -30,6 +30,11 @@ internal tree reconstructed. Repeals and renumbers are applied as temporal opera
 aliases so historical citations still resolve. See
 [docs/11 — Amendment extraction](docs/11-amendment-extraction.md).
 
+**The citation graph is built.** 172 754 references extracted near-verbatim from Lovdata's own
+links — 128 859 `cites` and 43 895 `implementsEEA` — joining 159 755 `hjemmel` and 52 262 `amends`
+edges. Impact analysis ("what depends on this provision?") works today. See
+[docs/12 — Citation graph](docs/12-citation-graph.md).
+
 Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09 — read
 [docs/10 — Phase 0 findings](docs/10-phase0-findings.md) alongside them.
 
@@ -48,6 +53,7 @@ Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09
 | [09 — Risks](docs/09-risks.md) | Pitfalls, legal caveats, open questions |
 | [10 — Phase 0 findings](docs/10-phase0-findings.md) | ❗ What the real data shows, and which earlier claims it disproves |
 | [11 — Amendment extraction](docs/11-amendment-extraction.md) | Recovering historical *wording* from change acts |
+| [12 — Citation graph](docs/12-citation-graph.md) | The reference network between provisions |
 
 The DDL and query functions in docs 04 and 07 are also shipped as runnable files under
 [`schema/`](schema/), verified against PostgreSQL 16 — see [Verification](#verification) below.
@@ -84,6 +90,8 @@ python3 tools/lovdata.py /tmp/lovtidend /tmp/parsed-lt   # change acts
 python3 tools/load.py "dbname=grunnmur" /tmp/parsed,/tmp/parsed-lt data
 python3 tools/amendments.py /tmp/lovtidend /tmp/amendments.jsonl        # operative amendments
 python3 tools/load_amendments.py "dbname=grunnmur" /tmp/amendments.jsonl # historical wording
+python3 tools/references.py /tmp/slice /tmp/refs.jsonl                   # citation graph
+python3 tools/load_references.py "dbname=grunnmur" /tmp/refs.jsonl
 psql -d grunnmur -f schema/020_reconstruct.sql     # LAST: fill what wording we still lack
 ```
 

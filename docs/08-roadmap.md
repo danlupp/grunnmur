@@ -112,7 +112,8 @@ Everything the model gives away nearly free once phases 1–5 hold:
 - The orphaned-regulation report ([07 §7.5](07-query-surface.md#75-graph-queries-the-model-makes-cheap)).
 - Consolidation-lag dashboard — the window where other databases are quietly wrong.
 - Akoma Ntoso and ELI export; bulk Parquet dumps.
-- Citation-graph analytics.
+- ✅ Citation graph built — 172 754 references, see [docs/12](12-citation-graph.md).
+- Citation-graph analytics beyond impact analysis.
 
 ---
 
