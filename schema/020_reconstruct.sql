@@ -22,10 +22,15 @@ with ev as (
      where ce.changed_prov is not null
        and coalesce(ce.in_force_on, ce.in_force_earliest) is not null
 ), cur as (
-    select pv.provision_id, pv.parent_id, pv.ordinal, pv.designator, pv.heading,
+    -- The EARLIEST interval whose wording we hold. Amendment-derived versions
+    -- (schema/015 via tools/load_amendments.py) already cover later intervals,
+    -- so only what precedes the earliest known wording is still a gap.
+    select distinct on (pv.provision_id)
+           pv.provision_id, pv.parent_id, pv.ordinal, pv.designator, pv.heading,
            pv.element_id, lower(pv.valid) as cur_start, pv.tx
       from provision_version pv
      where upper_inf(pv.tx) and pv.text_known
+     order by pv.provision_id, lower(pv.valid)
 ), pts as (
     select distinct e.provision_id, e.d
       from ev e join cur c on c.provision_id = e.provision_id
@@ -48,4 +53,10 @@ select s.provision_id,
        true,           -- but we do know a change happened here, and when
        (select max(evidence_id) from evidence where method = 'reconstruction')
   from seq s
- where coalesce(s.next_d, s.cur_start) > s.from_d;
+ where coalesce(s.next_d, s.cur_start) > s.from_d
+   -- never collide with wording we actually hold
+   and not exists (
+       select 1 from provision_version pv
+        where pv.provision_id = s.provision_id
+          and pv.tx && s.tx
+          and pv.valid && daterange(s.from_d, coalesce(s.next_d, s.cur_start), '[)'));

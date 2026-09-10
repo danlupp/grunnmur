@@ -86,8 +86,10 @@ snapshot sha256. This is the phase that makes the database bitemporal rather tha
 ## Phase 5 — Backfill and enrichment (4–6 weeks)
 
 - ✅ Lovtidend 2001→ ingested (39 157 change acts) and all change annotations extracted.
-- ⏭ Parse the operative instructions in change acts (`§ X skal lyde: …`) to recover historical
-  *wording*, not just historical change dates. This is the remaining high-value piece.
+- ✅ Operative instructions parsed (74 149 amendments) and loaded as 16 052 historical text
+  versions — see [docs/11](11-amendment-extraction.md).
+- ⏭ Apply extracted repeals and renumbers as temporal operations; reconstruct historical *structure*
+  so sub-paragraph amendments attach exactly.
 - Populate `text_known = false` intervals honestly rather than interpolating.
 - Stortinget enrichment: `enactedBy` edges.
 - Query API ([07](07-query-surface.md)).

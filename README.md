@@ -22,9 +22,10 @@ extracted and loaded into a working bitemporal store: 5 869 documents → 756 87
 5 868 to 40 748, cut unresolved stub works by 75 %, and lifted change events resolving to a *known*
 act from 10.5 % to **92.8 %**. Combined store: 2 165 352 provisions, 2.7 GB.
 
-⏭ **Next:** extracting the operative text from change acts (`§ 24 skal lyde: …`) — present in 72.5 %
-of Lovtidend documents — to turn 46 883 known-but-unknown-wording intervals into real historical
-text. See [docs/10 §10.5](docs/10-phase0-findings.md#-not-yet-done-operative-text-extraction).
+**Historical wording is extracted too.** 74 149 operative amendments (`§ 24 skal lyde: …`) parsed
+from the change acts and assembled into **16 052 historical text versions**, so 9 584 provisions now
+carry more than one wording. Wording held: 99.0 % at 2005, 99.4 % at 2015, 100 % today. See
+[docs/11 — Amendment extraction](docs/11-amendment-extraction.md).
 
 Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09 — read
 [docs/10 — Phase 0 findings](docs/10-phase0-findings.md) alongside them.
@@ -43,6 +44,7 @@ Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09
 | [08 — Roadmap](docs/08-roadmap.md) | Six phases with acceptance criteria |
 | [09 — Risks](docs/09-risks.md) | Pitfalls, legal caveats, open questions |
 | [10 — Phase 0 findings](docs/10-phase0-findings.md) | ❗ What the real data shows, and which earlier claims it disproves |
+| [11 — Amendment extraction](docs/11-amendment-extraction.md) | Recovering historical *wording* from change acts |
 
 The DDL and query functions in docs 04 and 07 are also shipped as runnable files under
 [`schema/`](schema/), verified against PostgreSQL 16 — see [Verification](#verification) below.
@@ -77,7 +79,9 @@ createdb grunnmur && psql -d grunnmur -f schema/001_init.sql -f schema/010_funct
 python3 tools/lovdata.py /tmp/lovtidend /tmp/parsed-lt   # change acts
 # consolidated slice FIRST: it states current law, Lovtidend the same work as promulgated
 python3 tools/load.py "dbname=grunnmur" /tmp/parsed,/tmp/parsed-lt data
-psql -d grunnmur -f schema/020_reconstruct.sql     # known-but-unknown-text intervals
+python3 tools/amendments.py /tmp/lovtidend /tmp/amendments.jsonl        # operative amendments
+python3 tools/load_amendments.py "dbname=grunnmur" /tmp/amendments.jsonl # historical wording
+psql -d grunnmur -f schema/020_reconstruct.sql     # LAST: fill what wording we still lack
 ```
 
 Parse takes ~90 seconds for 5 869 documents, load ~2 minutes, resulting database ~1.1 GB.
