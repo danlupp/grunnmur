@@ -299,8 +299,12 @@ def parse_document(path: pathlib.Path) -> dict:
         meta.setdefault(key, canon(dd.text_content()))
         if key in ('basedOn', 'changesToDocuments', 'lastChangedBy'):
             meta.setdefault(key + '_refs', [])
-            meta[key + '_refs'].extend(  # type: ignore[union-attr]
-                (a.get('href') or '').strip().lstrip('/') for a in dd.findall('.//a'))
+            refs = [(a.get('href') or '').strip().lstrip('/') for a in dd.findall('.//a')]
+            if not refs:
+                # Lovtidend writes these refs as bare text rather than links.
+                refs = [canon(li.text_content()).lstrip('/')
+                        for li in dd.findall('.//li')] or [canon(dd.text_content()).lstrip('/')]
+            meta[key + '_refs'].extend(r for r in refs if r)  # type: ignore[union-attr]
 
     work_id = meta.get('legacyID') or work_id_from_ref(str(meta.get('refid', '')))
     if not work_id:
@@ -314,8 +318,16 @@ def parse_document(path: pathlib.Path) -> dict:
     # falls back to bokmål rather than becoming a bogus language.
     language = raw_lang if re.fullmatch(r'[a-z]{2}', raw_lang) else 'nb'
     language = 'nb' if language == 'no' else language
-    doc_type = 'lov' if work_id.startswith('LOV') else (
-        'sentral_forskrift' if work_id.startswith('FOR') else 'stortingsvedtak')
+    # dokid names the collection: NL/SF are consolidated current law, LTI is
+    # Norsk Lovtidend -- the change acts themselves.
+    dokid = str(meta.get('dokid', ''))
+    collection = dokid.split('/')[0] if '/' in dokid else ('NL' if work_id.startswith('LOV') else 'SF')
+    amends_something = bool(meta.get('changesToDocuments_refs'))
+    if collection == 'LTI' and amends_something:
+        doc_type = 'endringslov' if work_id.startswith('LOV') else 'endringsforskrift'
+    else:
+        doc_type = 'lov' if work_id.startswith('LOV') else (
+            'sentral_forskrift' if work_id.startswith('FOR') else 'stortingsvedtak')
 
     work = dict(
         work_id=work_id, doc_type=doc_type,
@@ -325,7 +337,8 @@ def parse_document(path: pathlib.Path) -> dict:
         published_on=iso_date(str(meta.get('dateOfPublication', ''))),
         last_change_in_force=iso_date(str(meta.get('lastChangeInForce', ''))),
         last_corrected=iso_date(str(meta.get('lastupdated', ''))),
-        legal_area=meta.get('legalArea'), language=language, source_file=path.name,
+        legal_area=meta.get('legalArea'), language=language, collection=collection,
+        journal_number=meta.get('journalNumber'), source_file=path.name,
     )
 
     provisions, events, edges = [], [], []

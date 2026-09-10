@@ -117,23 +117,60 @@ Queried at 2010 it would return *nothing* — indistinguishable from "did not ex
 dates with **46 865 rows carrying `text_known = false`**, so the query answers "in force, wording
 not held". Wording held, by date: 97.7 % (2000), 97.6 % (2010), 98.5 % (2020), 100 % (today).
 
-## 10.5 ❗ The gap: Norsk Lovtidend
+## 10.5 Norsk Lovtidend — ingested
 
-`api.lovdata.no`, `lovdata.no` and `data.norge.no` are all refused by this environment's egress
-policy (403 on CONNECT). Lovtidend could not be fetched and must be added the same way the tarballs
-were.
+Initially blocked (`api.lovdata.no`, `lovdata.no` and `data.norge.no` are all refused by this
+environment's egress policy, 403 on CONNECT), then supplied directly as two archives:
+**39 157 documents**, 2001 → current year, under `lti/<year>/`.
 
-Its absence is precisely quantifiable: **only 10.5 % of the works named in change events are
-present in this slice.** That is not a defect — change acts are consumed into the consolidated text
-and by definition are not *current law* — but it means 20 138 works exist here only as stubs.
+Same markup vocabulary as the consolidated slice, with two differences that mattered:
 
-What Lovtidend would add, concretely:
+- ❗ **`Endrer` and `Hjemmel` refs are bare text, not `<a href>`** (`<li>forskrift/2004-12-17-1852</li>`).
+  Extracting only links yielded **zero** edges from 39 157 documents. With the text fallback:
+  48 487 `amends` and 138 345 `hasLegalBasis` edges.
+- `journalNumber` is present; `dokid` begins `LTI/`, which is what distinguishes a promulgated
+  document from a consolidated one and lets change acts be typed as
+  `endringslov` / `endringsforskrift`.
 
-1. **Prior wording.** Change acts carry the operative text (`§ 5-3 andre ledd skal lyde: …`). This
-   is the only free source that can turn 46 865 `text_known = false` intervals into real text, and
-   it is the difference between knowing *that* a provision changed and knowing what it said.
-2. **Authoritative promulgation dates**, independent of the annotations.
-3. **Resolution of the 34.8 % lower-bound events** into actual dates.
-4. **Bodies for 20 138 stub works.**
+❗ **A work can exist in both collections** — promulgated in Lovtidend, then consolidated. Those are
+two expressions of one work with overlapping valid time, and the `work_state` exclusion constraint
+rejected the load until the consolidated expression was given precedence. The Lovtidend
+promulgation date survives as `work.published_on`.
 
-Everything else in the historical pipeline is already working without it.
+### What it changed
+
+| | consolidated only | with Lovtidend |
+| --- | --- | --- |
+| Real works | 5 868 | **40 748** |
+| Stub works (cited, no body) | 20 138 | **5 113** (−75 %) |
+| Change events resolving to a *known* act | **10.5 %** | **92.8 %** |
+| `amends` edges | 3 775 | 52 262 |
+| Provisions | 756 878 | 2 165 352 |
+| Text deduplication | 29.6 % | 49.4 % |
+| Database | 1.1 GB | 2.7 GB |
+
+30 160 of the works are change acts — the documents that were previously invisible.
+
+### ⏭ Not yet done: operative text extraction
+
+Change acts carry the actual amending text, in the form
+[docs/06 §6.2](06-change-extraction.md#62-lovtidend-change-acts) anticipated:
+
+```
+I lov 6. juni 1975 nr. 29 om eigedomsskatt til kommunane gjøres følgende endringer:
+§ 24 skal lyde:
+§ 24. Eigedomsskatten skal svarast til den kommunen der skatten er utskriven.
+§ 25 annet ledd skal lyde:
+Kommunen kan i særlege høve gjeva utsetjing.
+```
+
+**72.5 % of Lovtidend documents** contain such instructions (`skal lyde` / `oppheves` / `blir ny`,
+measured over a 3 000-document sample). Parsing them into `(target provision, new text,
+entry into force)` triples is what converts the 46 883 `text_known = false` intervals into real
+historical wording — the difference between knowing *that* a provision changed and knowing what it
+said. The data is now in hand; the extractor is not yet written, and is the single highest-value
+next piece of work.
+
+One structural wrinkle to plan for: change acts are divided into roman-numeral parts (`I`, `II`,
+`III`), and different parts can carry different entry-into-force dates, so the operative parser
+must attach dates per part rather than per act.

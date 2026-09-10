@@ -56,7 +56,7 @@ Stages 3–4 — the technical heart of the project.
 provisions that actually changed and nothing else. The phantom-diff rate from formatting churn is
 the metric that decides whether canonicalisation is finished — target zero.
 
-## Phase 3 — Change extraction ✅ **done for `changesToParent`** (99.8 %); Lovtidend blocked
+## Phase 3 — Change extraction ✅ **`changesToParent` done** (99.8 %); Lovtidend ingested, operative text pending
 
 Stage 5 — [06](06-change-extraction.md).
 
@@ -85,8 +85,9 @@ snapshot sha256. This is the phase that makes the database bitemporal rather tha
 
 ## Phase 5 — Backfill and enrichment (4–6 weeks)
 
-- Backfill from Lovtidend 2001→ and all footnote annotations; reconstruct valid time to the
-  evidence horizon.
+- ✅ Lovtidend 2001→ ingested (39 157 change acts) and all change annotations extracted.
+- ⏭ Parse the operative instructions in change acts (`§ X skal lyde: …`) to recover historical
+  *wording*, not just historical change dates. This is the remaining high-value piece.
 - Populate `text_known = false` intervals honestly rather than interpolating.
 - Stortinget enrichment: `enactedBy` edges.
 - Query API ([07](07-query-surface.md)).

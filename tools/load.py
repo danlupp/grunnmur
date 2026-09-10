@@ -11,20 +11,27 @@ Where only a lower bound is known the interval is opened at that bound and the
 row is marked so queries can tell a bound from a date.
 """
 from __future__ import annotations
-import json, sys, pathlib, collections, hashlib, datetime
+import json, re, sys, pathlib, collections, hashlib, datetime
 import psycopg
 
 BATCH = 5000
 
 
-def rows(path: pathlib.Path):
-    with path.open(encoding='utf-8') as fh:
-        for line in fh:
-            yield json.loads(line)
+def rows(*paths: pathlib.Path):
+    for path in paths:
+        if not path.exists():
+            continue
+        with path.open(encoding='utf-8') as fh:
+            for line in fh:
+                yield json.loads(line)
 
 
-def load(dsn: str, indir: str, rawdir: str) -> None:
-    d = pathlib.Path(indir)
+def load(dsn: str, indirs: str, rawdir: str) -> None:
+    # Several parsed directories may be given, comma-separated. Order matters:
+    # the first to define a work or provision wins, so pass the consolidated
+    # slice before Lovtidend -- consolidated text is the current-law expression,
+    # Lovtidend carries the same work as promulgated.
+    dirs = [pathlib.Path(x) for x in indirs.split(',')]
     conn = psycopg.connect(dsn, autocommit=False)
     cur = conn.cursor()
 
@@ -33,8 +40,15 @@ def load(dsn: str, indir: str, rawdir: str) -> None:
     snap_ids = {}
     for archive in sorted(pathlib.Path(rawdir).glob('*.tar.bz2')):
         sha = hashlib.sha256(archive.read_bytes()).digest()
-        source = ('lovdata.gjeldende-lover' if 'lover' in archive.name
-                  else 'lovdata.gjeldende-sentrale-forskrifter')
+        stem = archive.name.lower()
+        if 'lovtidend' in stem:
+            source = 'lovtidend.avd1.' + ('current' if '2026' in stem else 'archive')
+        elif 'gjeldende-lover' in stem:
+            source = 'lovdata.gjeldende-lover'
+        elif 'forskrifter' in stem:
+            source = 'lovdata.gjeldende-sentrale-forskrifter'
+        else:
+            source = 'lovdata.' + re.sub(r'[^a-z0-9]+', '-', stem.split('.tar')[0])
         cur.execute(
             "insert into snapshot(source, fetched_at, content_sha256, byte_size, state)"
             " values (%s,%s,%s,%s,'promoted') returning snapshot_id",
@@ -50,7 +64,7 @@ def load(dsn: str, indir: str, rawdir: str) -> None:
     ev_snapshot = cur.fetchone()[0]
 
     # ---- works, plus stubs for anything referenced but absent ------------
-    all_works = list(rows(d / 'works.jsonl'))
+    all_works = list(rows(*[d / 'works.jsonl' for d in dirs]))
     works, seen_w = [], set()
     for w in all_works:            # one work row per id; languages differ below
         if w['work_id'] not in seen_w:
@@ -64,11 +78,11 @@ def load(dsn: str, indir: str, rawdir: str) -> None:
     print(f'works: {len(works):,}')
 
     referenced = set()
-    for e in rows(d / 'events.jsonl'):
+    for e in rows(*[d / 'events.jsonl' for d in dirs]):
         for k in ('changing_work', 'in_force_source'):
             if e.get(k):
                 referenced.add(e[k])
-    for e in rows(d / 'edges.jsonl'):
+    for e in rows(*[d / 'edges.jsonl' for d in dirs]):
         if e.get('dst_work'):
             referenced.add(e['dst_work'])
     stubs = sorted(referenced - present)
@@ -81,14 +95,28 @@ def load(dsn: str, indir: str, rawdir: str) -> None:
     # ---- work_state: title/ministry, valid from entry into force ---------
     with cur.copy("copy work_state(work_id, language, valid, tx, title, short_title,"
                   " ministry, in_force, evidence_id) from stdin") as cp:
-        for w in all_works:        # one state row per language expression
+        seen_ls = set()
+        for w in all_works:        # one state row per (work, language) expression
+            # A work promulgated in Lovtidend and later consolidated appears in
+            # both collections. They are two expressions of one work; the
+            # consolidated one states current law, so it wins. The Lovtidend
+            # promulgation date survives as work.published_on.
+            if (w['work_id'], w['language']) in seen_ls:
+                continue
+            seen_ls.add((w['work_id'], w['language']))
             start = w['date_in_force'] or w['published_on'] or '1000-01-01'
             cp.write_row((w['work_id'], w['language'], f'[{start},)',
                           f'[{fetched.isoformat()},)',
                           w['title'], w['short_title'], w['ministry'], True, ev_snapshot))
 
     # ---- provisions ------------------------------------------------------
-    provs = list(rows(d / 'provisions.jsonl'))
+    provs, _seen_p = [], set()
+    for _p in rows(*[d / 'provisions.jsonl' for d in dirs]):
+        _k = (_p['work_id'], _p['language'], _p['logical_key'])
+        if _k in _seen_p:
+            continue          # same work seen in both collections; first wins
+        _seen_p.add(_k)
+        provs.append(_p)
     with cur.copy("copy provision(work_id, language, logical_key, level) from stdin") as cp:
         seen = set()
         for p in provs:
@@ -119,7 +147,7 @@ def load(dsn: str, indir: str, rawdir: str) -> None:
           f'({1 - len(written)/len(provs):.1%} deduplicated)')
 
     # ---- events ----------------------------------------------------------
-    events = list(rows(d / 'events.jsonl'))
+    events = list(rows(*[d / 'events.jsonl' for d in dirs]))
     ev_ids = []
     with cur.copy("copy evidence(snapshot_id, method, locator, raw_excerpt, confidence) from stdin") as cp:
         for e in events:
@@ -179,7 +207,7 @@ def load(dsn: str, indir: str, rawdir: str) -> None:
     print(f'provision versions: {n:,}')
 
     # ---- edges -----------------------------------------------------------
-    edges = list(rows(d / 'edges.jsonl'))
+    edges = list(rows(*[d / 'edges.jsonl' for d in dirs]))
     cur.execute("insert into evidence(snapshot_id, method, confidence, raw_excerpt)"
                 " values (%s,'basedOn',1.0,'document header') returning evidence_id", (snap,))
     ev_edge = cur.fetchone()[0]

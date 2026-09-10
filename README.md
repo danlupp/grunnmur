@@ -18,9 +18,13 @@ sha256 of a specific file fetched on a specific night.
 extracted and loaded into a working bitemporal store: 5 869 documents → 756 878 provisions,
 92 536 change events, 25 185 edges. Point-in-time queries along both axes work today.
 
-❗ **Norsk Lovtidend is not yet ingested** — the Lovdata hosts are refused by this environment's
-egress policy, so it has to be added manually. What that unlocks is quantified in
-[docs/10 §10.5](docs/10-phase0-findings.md#105--the-gap-norsk-lovtidend).
+**Norsk Lovtidend is ingested too** — 39 157 change acts, 2001 → present. That took real works from
+5 868 to 40 748, cut unresolved stub works by 75 %, and lifted change events resolving to a *known*
+act from 10.5 % to **92.8 %**. Combined store: 2 165 352 provisions, 2.7 GB.
+
+⏭ **Next:** extracting the operative text from change acts (`§ 24 skal lyde: …`) — present in 72.5 %
+of Lovtidend documents — to turn 46 883 known-but-unknown-wording intervals into real historical
+text. See [docs/10 §10.5](docs/10-phase0-findings.md#-not-yet-done-operative-text-extraction).
 
 Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09 — read
 [docs/10 — Phase 0 findings](docs/10-phase0-findings.md) alongside them.
@@ -70,7 +74,9 @@ mkdir -p /tmp/slice && for f in data/*.tar.bz2; do tar -xjf "$f" -C /tmp/slice; 
 python3 tools/recon.py  /tmp/slice                 # survey the format
 python3 tools/lovdata.py /tmp/slice /tmp/parsed    # -> works/provisions/events/edges JSONL
 createdb grunnmur && psql -d grunnmur -f schema/001_init.sql -f schema/010_functions.sql
-python3 tools/load.py "dbname=grunnmur" /tmp/parsed data
+python3 tools/lovdata.py /tmp/lovtidend /tmp/parsed-lt   # change acts
+# consolidated slice FIRST: it states current law, Lovtidend the same work as promulgated
+python3 tools/load.py "dbname=grunnmur" /tmp/parsed,/tmp/parsed-lt data
 psql -d grunnmur -f schema/020_reconstruct.sql     # known-but-unknown-text intervals
 ```
 
