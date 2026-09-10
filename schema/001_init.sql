@@ -75,6 +75,12 @@ create table provision (
     -- so language is part of provision identity. ELI carries it the same way.
     language     text not null default 'nb',
     logical_key  text not null,     -- 'lov/2015-04-10-17/§20-1/ledd/1/bokstav/a'
+    -- 'snapshot' = present in current law. 'lovtidend' = reconstructed from
+    -- change acts: the provision existed once and has since been removed, so it
+    -- appears in no current-law dump and is known only through the acts that
+    -- amended and repealed it. Always filterable, never silently mixed in.
+    origin       text not null default 'snapshot'
+        check (origin in ('snapshot','lovtidend')),
     level        text not null
         check (level in ('del','kapittel','paragraf','ledd','punkt','punktum',
                          'bokstav','seksjon','vedlegg')),

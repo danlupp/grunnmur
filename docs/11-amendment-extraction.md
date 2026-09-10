@@ -106,12 +106,77 @@ python3 tools/load_amendments.py "$DSN" amendments.jsonl# historical wording
 psql -f schema/020_reconstruct.sql                      # then fill what is left
 ```
 
-## 11.6 What would improve it further
+## 11.6 Repeals and renumbers
 
-- **Repeal and renumber are extracted but not yet applied** as temporal operations — they are
-  recorded (5 190 and 2 472) but do not yet close intervals or drive `succeeds` edges.
-- **Historical structure.** Attaching sub-paragraph amendments exactly requires reconstructing the
-  ledd structure *at the amendment's date*, which means replaying amendments forward from each
-  act's original promulgated text rather than matching against today's structure.
+### Repeals resolve rarely — by construction
+
+Repealing a provision removes it from current law, so a repeal's target is
+*precisely the thing least likely to be in the consolidated dump.* Of 4 680 repeals,
+2 115 still find their target, 1 800 point at a provision since removed from a work we do hold,
+and 765 at a work we do not.
+
+Of the 2 002 that resolve exactly, **1 is applied**. That is not a defect; it follows from two
+guards, both of which caught real corruption during development:
+
+| Guard | Why | Count withheld |
+| --- | --- | --- |
+| ❗ `sub_target is not null` | `§ 42 annet punktum oppheves` removes a **sentence**, but its key exact-matches the whole `§ 42`. Applying it would repeal a paragraph on the strength of an instruction that never said so | 159 |
+| ❗ repeal date ≤ snapshot date | A provision still standing in the current-law dump cannot have been repealed in the past. Only a **future** repeal is unambiguous | 971 |
+| repeal predates the wording we hold | The provision was repealed and later re-enacted, or the key matched the wrong thing | 572 |
+| already marked repealed via `data-repealeddate` | Nothing to do; the dump already says so | 210 |
+
+The first guard was found by inspecting applied repeals: 75 of them had silently truncated a whole
+ledd when the instruction removed one sentence. Everything withheld is written to `change_event`
+with `state = 'conflict'`, so it is reviewable rather than lost.
+
+### Renumbers resolve on the *new* key
+
+`§ 3 blir ny § 4` cannot be resolved on `§ 3` — after the renumbering nothing lives there. Resolving
+on `renamed_to` instead gives 726 matches, which become **712 `provision_alias` rows** (so a
+historical citation to `§ 3` still resolves) and **687 `succeeds` edges**.
+
+## 11.7 ❗ Recovering provisions that no longer exist
+
+The repeal analysis exposed something more valuable than the repeals themselves: **17 410 provision
+keys are targeted by change acts but absent from every current-law dump.** They are the provisions
+that were repealed out of existence. Until now every amendment aimed at them was dropped, because
+there was no row to attach to — yet the change acts carry both their wording and their dates.
+
+`provision.origin` now distinguishes them:
+
+- `snapshot` — present in current law.
+- `lovtidend` — known **only** from change acts; never appeared in a dump we hold.
+
+Requiring real wording, a date, and no sub-paragraph target recovers **12 381 provisions with
+14 400 wordings**. One example reads as six successive texts from 2003 to 2026 for a provision that
+appears in no current-law dump at all.
+
+Two honest limits on these rows, which is why they carry `confidence = 0.7`:
+
+- **The end is an upper bound, not a date.** Where no repeal date is known, the final interval is
+  closed at the snapshot in which the provision is already absent. It certainly ended by then; we do
+  not know it lasted that long.
+- **No structural position.** `parent_id` and `designator` are null — the surrounding tree at the
+  time is not reconstructed, so these provisions do not yet assemble into a document.
+
+Both are filterable: `where p.origin = 'snapshot'` excludes every reconstructed provision.
+
+## 11.8 Where the database stands
+
+| Rows | Source | Wording |
+| --- | --- | --- |
+| 2 165 352 | current-law snapshot | held |
+| 16 052 | Lovtidend, provisions still in force | held |
+| 14 400 | Lovtidend, provisions since removed | held |
+| 34 656 | reconstruction from change dates | **not held** |
+
+## 11.9 What would improve it further
+
+- **Historical structure.** Attaching sub-paragraph amendments exactly, and giving recovered
+  provisions a parent, requires replaying amendments forward from each act's promulgated text
+  rather than matching against today's tree. That would also let the 159 sentence-level repeals and
+  the 7 977 paragraph-level attachments land precisely.
+- **The 971 past repeals on provisions still present** deserve a look: some are likely key
+  mismatches worth fixing, others genuine re-enactments.
 - **Per-part entry into force** is parsed, but acts stating different dates per part in prose
   ("del II trer i kraft 1. januar 2021") still fall back to the act-level date.

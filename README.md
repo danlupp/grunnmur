@@ -23,9 +23,10 @@ extracted and loaded into a working bitemporal store: 5 869 documents → 756 87
 act from 10.5 % to **92.8 %**. Combined store: 2 165 352 provisions, 2.7 GB.
 
 **Historical wording is extracted too.** 74 149 operative amendments (`§ 24 skal lyde: …`) parsed
-from the change acts and assembled into **16 052 historical text versions**, so 9 584 provisions now
-carry more than one wording. Wording held: 99.0 % at 2005, 99.4 % at 2015, 100 % today. See
-[docs/11 — Amendment extraction](docs/11-amendment-extraction.md).
+from the change acts and assembled into **30 452 historical text versions** — including **12 381
+provisions recovered that exist in no current-law dump**, having been repealed out of existence.
+Repeals and renumbers are applied as temporal operations, with 712 aliases so historical citations
+still resolve. See [docs/11 — Amendment extraction](docs/11-amendment-extraction.md).
 
 Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09 — read
 [docs/10 — Phase 0 findings](docs/10-phase0-findings.md) alongside them.

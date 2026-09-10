@@ -88,8 +88,11 @@ snapshot sha256. This is the phase that makes the database bitemporal rather tha
 - ✅ Lovtidend 2001→ ingested (39 157 change acts) and all change annotations extracted.
 - ✅ Operative instructions parsed (74 149 amendments) and loaded as 16 052 historical text
   versions — see [docs/11](11-amendment-extraction.md).
-- ⏭ Apply extracted repeals and renumbers as temporal operations; reconstruct historical *structure*
-  so sub-paragraph amendments attach exactly.
+- ✅ Repeals and renumbers applied as temporal operations (conservatively — see
+  [docs/11 §11.6](11-amendment-extraction.md)), plus 12 381 provisions recovered that no longer
+  exist in current law.
+- ⏭ Reconstruct historical *structure* by replaying amendments forward from each act's promulgated
+  text, so sub-paragraph amendments attach exactly and recovered provisions gain a parent.
 - Populate `text_known = false` intervals honestly rather than interpolating.
 - Stortinget enrichment: `enactedBy` edges.
 - Query API ([07](07-query-surface.md)).
