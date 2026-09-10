@@ -44,19 +44,20 @@ dropped — 6 986 of them.
 
 ## 11.3 Results
 
-**74 149 amendments** from 19 364 acts (49 % of the corpus; the rest are entry-into-force
-resolutions, delegations and similar). 93 % carry an entry-into-force date.
+**147 137 amendments** from 19 355 acts (49 % of the corpus; the rest are entry-into-force
+resolutions, delegations and similar). 93 % carry an entry-into-force date. (74 149 of these are
+instruction-level; the rest are sub-structure — see [§11.10](#1110--structure-recovered-from-replacement-text).)
 
 | Operation | Count |
 | --- | --- |
-| amend | 53 719 |
-| insert | 12 768 |
-| repeal | 5 190 |
-| renumber | 2 472 |
+| amend | 112 606 |
+| insert | 26 778 |
+| repeal | 5 275 |
+| renumber | 2 478 |
 
 ### ❗ Sub-paragraph keys are historical, so resolution is two-level
 
-40 182 amendments resolve to a provision — 32 205 on the full key, **7 977 only at § level**. That
+88 862 amendments resolve to a provision — 67 617 on the full key, **21 245 only at § level**. That
 second number is not sloppiness, and collapsing it into the first would be wrong:
 
 > `§ 5 andre ledd` names the ledd structure **as it stood on the amendment's date**. Ledd are
@@ -161,22 +162,62 @@ Two honest limits on these rows, which is why they carry `confidence = 0.7`:
 
 Both are filterable: `where p.origin = 'snapshot'` excludes every reconstructed provision.
 
-## 11.8 Where the database stands
+## 11.8 ❗ Structure recovered from replacement text {#1110--structure-recovered-from-replacement-text}
+
+The remaining accuracy problem was that `§ 5 andre ledd` names the ledd structure **of the
+amendment's date**, which need not be today's — so sub-paragraph amendments could not be placed
+exactly. Replaying amendments forward from each act's promulgated text would solve it, but Lovtidend
+starts in 2001 and most works predate it, so most originals are simply not available.
+
+The tractable route needs no inference at all: **a whole-paragraph replacement already contains its
+own sub-structure.** `§ 3 skal lyde:` is followed not by one blob of text but by separate `legalP`
+blocks — one per ledd — each of which may contain `listArticle` items. Flattening them into a single
+string was throwing away the very structure being sought.
+
+Emitting each sub-block as its own record, keyed `<paragraph>/ledd/N[/punkt/M]`:
+
+| Record level | Amendments | Resolve exactly |
+| --- | --- | --- |
+| paragraph (the instruction's own target) | 40 393 | 80.6 % |
+| **ledd** (read out of the replacement) | **32 011** | 76.6 % |
+| **punkt** (read out of a ledd) | **16 458** | 64.1 % |
+
+The 48 469 ledd and punkt records did not exist before; 35 061 of them attach exactly.
+
+Two parser defects surfaced doing this:
+
+- Taking only the *outermost* block hid instructions nested inside another block, losing 439
+  repeals. Blocks that contain instructions are now descended into rather than taken whole.
+- `§ 13 tredje ledd blir nytt fjerde ledd` names **two** positions, and the key builder appended
+  both, producing `§13/ledd/3/ledd/4`. The target is the first; the second is now read as
+  `renamed_to`, which also gave renumbering at ledd level rather than § level only.
+
+### Recovered provisions gain their tree
+
+Because keys are built in Lovdata's own `data-change-part` idiom, the parent of
+`…/§9/ledd/1` is just the key with its last level stripped. **30 623 of 36 992** reconstructed
+wordings now carry a `parent_id` and an `ordinal` — the remainder are top-level § whose parent is
+the document. A provision absent from every current-law dump now assembles as a tree, not a heap.
+
+## 11.9 Where the database stands
 
 | Rows | Source | Wording |
 | --- | --- | --- |
 | 2 165 352 | current-law snapshot | held |
-| 16 052 | Lovtidend, provisions still in force | held |
-| 14 400 | Lovtidend, provisions since removed | held |
-| 34 656 | reconstruction from change dates | **not held** |
+| 36 992 | Lovtidend, provisions since removed (30 677 provisions) | held |
+| 34 855 | reconstruction from change dates | **not held** |
+| 28 222 | Lovtidend, provisions still in force | held |
 
-## 11.9 What would improve it further
+Wording held, by valid date: **99.01 %** (2005), 99.44 % (2015), 100 % (today).
 
-- **Historical structure.** Attaching sub-paragraph amendments exactly, and giving recovered
-  provisions a parent, requires replaying amendments forward from each act's promulgated text
-  rather than matching against today's tree. That would also let the 159 sentence-level repeals and
-  the 7 977 paragraph-level attachments land precisely.
-- **The 971 past repeals on provisions still present** deserve a look: some are likely key
-  mismatches worth fixing, others genuine re-enactments.
+## 11.10 What would improve it further
+
+- **The 21 245 paragraph-level attachments** still need historical structure to place exactly. The
+  replacement-text route covers only paragraphs that were replaced wholesale; a targeted amendment
+  to one ledd of a paragraph never touched since gives no structural evidence.
+- **The 971 past repeals on provisions still present** deserve triage: some are key mismatches worth
+  fixing, others genuine re-enactments.
+- **Recovered provisions have an upper-bound end, not a known one**, wherever no repeal date exists
+  (`confidence = 0.7`, filterable via `provision.origin`).
 - **Per-part entry into force** is parsed, but acts stating different dates per part in prose
   ("del II trer i kraft 1. januar 2021") still fall back to the act-level date.

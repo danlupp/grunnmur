@@ -60,6 +60,61 @@ IN_FORCE = re.compile(r'\btrer?\s+i\s+kraft\b|\btrer\s+i\s+kraft\b|\bgjelder\s+f
                       r'\btek\s+til\s+å\s+gjelde\b', re.I)
 
 
+BLOCK_CLASSES = {'defaultP', 'legalP', 'listArticle', 'numberedLegalP',
+                 'futureLegalArticle', 'miscHeadline', 'legalArticle'}
+SUBLEVEL = re.compile(r'/(ledd|punkt|punktum|bokstav)/')
+
+
+def _cls(el) -> set[str]:
+    return set((el.get('class') or '').split())
+
+
+def top_level_blocks(part) -> list:
+    """The part's content as a flat, document-order sequence of blocks.
+
+    Outermost blocks, EXCEPT that a block hiding instructions inside it is
+    descended into rather than taken whole -- instructions nest inside lists,
+    tables and subsections in 16 % of acts, and taking the outer block would
+    swallow both the instruction and the wording it introduces.
+    """
+    out: list = []
+
+    def walk(el):
+        for child in el:
+            if _cls(child) & BLOCK_CLASSES:
+                if any(is_instruction(d) for d in child.iterdescendants()):
+                    walk(child)          # instructions inside: go deeper
+                else:
+                    out.append(child)
+            else:
+                walk(child)              # not a block (ul, td, div): pass through
+
+    walk(part)
+    return out
+
+
+def ledd_blocks(content: list) -> list:
+    """The ledd of a replacement paragraph, in order.
+
+    A replacement may arrive as bare legalP siblings, or wrapped in a single
+    futureLegalArticle/legalArticle whose legalP children are the ledd.
+    """
+    direct = [b for b in content if 'legalP' in _cls(b)]
+    if direct:
+        return direct
+    if len(content) == 1 and _cls(content[0]) & {'futureLegalArticle', 'legalArticle'}:
+        return [k for k in content[0].iterdescendants() if 'legalP' in _cls(k)
+                and not any('legalP' in _cls(a) for a in k.iterancestors()
+                            if a is not content[0])]
+    return []
+
+
+def punkt_blocks(ledd) -> list:
+    """Lettered/numbered list items directly under one ledd."""
+    return [k for k in ledd.iterdescendants() if 'listArticle' in _cls(k)
+            and not any('listArticle' in _cls(a) for a in k.iterancestors())]
+
+
 def instruction_op(text: str) -> str | None:
     """Operation for an instruction line, or None if it is not one."""
     m = LYDE.search(text)
@@ -86,6 +141,12 @@ def target_key(text: str, work_ref: str) -> tuple[str | None, str | None]:
     key = f'{work_ref}/§{pm.group(1)}'
     sub = None
     tail = text[pm.end():]
+    # "§ 13 tredje ledd blir nytt fjerde ledd" names TWO positions; only the
+    # first is the target. Stop at the renumbering verb, and take one ledd only.
+    rm = RENUM.search(tail)
+    if rm:
+        tail = tail[:rm.start()]
+    seen_ledd = False
     for m in SUBDIV.finditer(tail):
         n = ORDINALS.get((m.group(2) or '').lower()) or (int(m.group(3)) if m.group(3) else None)
         if not n:
@@ -94,6 +155,10 @@ def target_key(text: str, work_ref: str) -> tuple[str | None, str | None]:
         if level == 'punktum':          # a sentence: finer than we model
             sub = f'punktum/{n}'
             break
+        if level == 'ledd':
+            if seen_ledd:
+                break
+            seen_ledd = True
         key += f'/{"ledd" if level == "ledd" else "punkt"}/{n}'
     bm = BOKSTAV.search(tail)
     if bm:
@@ -170,24 +235,11 @@ def parse_act(path: pathlib.Path) -> list[dict]:
         part_in_force = (nor_date(ptext) if IN_FORCE.search(ptext) else None) \
             or global_in_force or act_in_force
 
-        instrs = [canon(c.text_content()) for c in part.iter() if is_instruction(c)]
-        # Drop duplicates that arise when an instruction element nests inside
-        # another matching element, keeping document order.
-        seen_i, ordered = set(), []
-        for t in instrs:
-            if t not in seen_i:
-                seen_i.add(t)
-                ordered.append(t)
-        whole = canon(part.text_content())
-        spans, cursor = [], 0
-        for t in ordered:                      # locate each instruction in order
-            at = whole.find(t, cursor)
-            if at < 0:
-                continue
-            spans.append((at, at + len(t), t))
-            cursor = at + len(t)
+        blocks = top_level_blocks(part)
+        idx = [i for i, b in enumerate(blocks) if is_instruction(b)]
 
-        for j, (start, stop, instr) in enumerate(spans):
+        for j, i in enumerate(idx):
+            instr = canon(blocks[i].text_content())
             op = instruction_op(instr)
             key, sub = target_key(instr, work_ref)
             if not key and not NON_PARAGRAF.search(instr):
@@ -195,27 +247,57 @@ def parse_act(path: pathlib.Path) -> list[dict]:
             renamed_to = None
             if op == 'renumber':
                 rm = RENUM.search(instr)
-                after = PARAGRAF.search(instr[rm.end():]) if rm else None
-                renamed_to = f'{work_ref}/§{after.group(1)}' if after else None
-            end = spans[j + 1][0] if j + 1 < len(spans) else len(whole)
-            new_text = canon(whole[stop:end])
+                rest = instr[rm.end():] if rm else ''
+                after = PARAGRAF.search(rest)
+                if after:
+                    renamed_to = f'{work_ref}/§{after.group(1)}'
+                elif key:
+                    # a ledd moved within its §: "tredje ledd blir nytt fjerde ledd"
+                    sm = SUBDIV.search(rest)
+                    n = (ORDINALS.get((sm.group(2) or '').lower())
+                         or (int(sm.group(3)) if sm and sm.group(3) else None)) if sm else None
+                    if n and sm.group(4).lower() == 'ledd':
+                        renamed_to = f"{key.split('/ledd/')[0]}/ledd/{n}"
+            stop = idx[j + 1] if j + 1 < len(idx) else len(blocks)
+            content = blocks[i + 1:stop]
+            new_text = canon(' '.join(b.text_content() for b in content))
             if op in ('amend', 'insert') and not new_text:
                 continue                      # instruction with no wording after it
             if op in ('repeal', 'renumber'):
                 new_text = ''                 # these state no wording, by nature
-            out.append(dict(
-                act=act_id, part=label or None, target_work=work,
-                target_key=key, sub_target=sub, operation=op,
-                # Amendments to annexes, headings and EEA fields have no § to
-                # attach to; they are recorded rather than dropped.
-                target_kind='provision' if key else 'other',
-                renamed_to=renamed_to,
-                in_force_on=part_in_force,
-                new_text=new_text or None,
-                new_text_sha256=sha256(new_text) if new_text else None,
-                instruction=instr[:220], source_file=path.name,
-                confidence=1.0 if (part_in_force and new_text) else 0.6,
-            ))
+
+            def rec(k, text, level='paragraph', sub_t=sub):
+                return dict(
+                    act=act_id, part=label or None, target_work=work,
+                    target_key=k, sub_target=sub_t, operation=op,
+                    # Amendments to annexes, headings and EEA fields have no § to
+                    # attach to; they are recorded rather than dropped.
+                    target_kind='provision' if k else 'other',
+                    renamed_to=renamed_to, in_force_on=part_in_force,
+                    new_text=text or None,
+                    new_text_sha256=sha256(text) if text else None,
+                    derived=level,
+                    instruction=instr[:220], source_file=path.name,
+                    confidence=1.0 if (part_in_force and text) else 0.6,
+                )
+
+            out.append(rec(key, new_text))
+
+            # A whole-paragraph replacement CONTAINS its own sub-structure: the
+            # ledd of the new § arrive as separate legalP blocks. Emitting them
+            # individually turns a paragraph-level blob into exact ledd-level
+            # wording -- structure recovered from evidence, not inferred.
+            if key and op in ('amend', 'insert') and not SUBLEVEL.search(key):
+                for n, ledd in enumerate(ledd_blocks(content), 1):
+                    ltext = canon(ledd.text_content())
+                    if not ltext:
+                        continue
+                    lkey = f'{key}/ledd/{n}'
+                    out.append(rec(lkey, ltext, 'ledd', None))
+                    for m, pt in enumerate(punkt_blocks(ledd), 1):
+                        ptext_ = canon(pt.text_content())
+                        if ptext_:
+                            out.append(rec(f'{lkey}/punkt/{m}', ptext_, 'punkt', None))
     return out
 
 

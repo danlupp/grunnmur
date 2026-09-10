@@ -24,15 +24,18 @@ import psycopg
 
 COLS = ['act', 'part', 'target_work', 'target_key', 'sub_target', 'operation',
         'renamed_to', 'target_kind', 'in_force_on', 'new_text', 'new_text_sha256',
-        'instruction', 'source_file', 'confidence']
+        'derived', 'instruction', 'source_file', 'confidence']
 
 STAGE = """
 drop table if exists amd_stage;
 create table amd_stage(
   act text, part text, target_work text, target_key text, sub_target text,
   operation text, renamed_to text, target_kind text, in_force_on date,
-  new_text text, new_text_sha256 text, instruction text, source_file text,
-  confidence numeric);
+  new_text text, new_text_sha256 text,
+  -- 'paragraph' = the instruction's own target; 'ledd'/'punkt' = sub-structure
+  -- read out of a whole-paragraph replacement, which carries its own ledd.
+  derived text,
+  instruction text, source_file text, confidence numeric);
 """
 
 ASSEMBLE = """
@@ -312,6 +315,25 @@ select h.provision_id,
                                       (select max(fetched_at)::date from snapshot)) as end_d,
                              h.next_d as next_d) e
  where e.end_d > h.in_force_on;
+
+-- Recovered provisions inherit structure from their own keys: a key is built as
+-- <paragraph>/ledd/N[/punkt/M], so the parent is the key with its last level
+-- stripped, and the ordinal is that level's number. This is why keys are worth
+-- deriving in Lovdata's own idiom -- the tree falls out of them.
+update provision_version pv
+   set parent_id = par.provision_id,
+       ordinal   = coalesce((regexp_match(p.logical_key, '/(?:ledd|punkt)/([0-9]+)$'))[1]::int,
+                            pv.ordinal),
+       designator = coalesce(pv.designator,
+                             (regexp_match(p.logical_key, '(§[0-9A-Za-zæøåÆØÅ-]+)$'))[1])
+  from provision p
+  left join provision par
+         on par.work_id = p.work_id
+        and par.logical_key = regexp_replace(p.logical_key, '/(ledd|punkt)/[0-9]+$', '')
+        and par.logical_key <> p.logical_key
+ where pv.provision_id = p.provision_id
+   and p.origin = 'lovtidend'
+   and pv.parent_id is null;
 """
 
 
@@ -346,6 +368,8 @@ def main(dsn: str, path: str) -> None:
         ("select count(*) from provision where origin='lovtidend'", 'provisions recovered (gone from current law)'),
         ("select count(*) from provision_version pv join provision p using(provision_id)"
          " where p.origin='lovtidend'", '  their wordings'),
+        ("select count(*) from provision_version pv join provision p using(provision_id)"
+         " where p.origin='lovtidend' and pv.parent_id is not null", '  with a parent'),
     ]:
         cur.execute(q)
         print(f'{label:28} {cur.fetchone()[0]:,}')

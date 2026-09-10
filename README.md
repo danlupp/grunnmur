@@ -22,11 +22,13 @@ extracted and loaded into a working bitemporal store: 5 869 documents → 756 87
 5 868 to 40 748, cut unresolved stub works by 75 %, and lifted change events resolving to a *known*
 act from 10.5 % to **92.8 %**. Combined store: 2 165 352 provisions, 2.7 GB.
 
-**Historical wording is extracted too.** 74 149 operative amendments (`§ 24 skal lyde: …`) parsed
-from the change acts and assembled into **30 452 historical text versions** — including **12 381
-provisions recovered that exist in no current-law dump**, having been repealed out of existence.
-Repeals and renumbers are applied as temporal operations, with 712 aliases so historical citations
-still resolve. See [docs/11 — Amendment extraction](docs/11-amendment-extraction.md).
+**Historical wording is extracted too.** 147 137 operative amendments parsed from the change acts —
+including the ledd and punkt structure carried inside each whole-paragraph replacement — and
+assembled into **65 214 historical text versions**. Among them **30 677 provisions recovered that
+exist in no current-law dump**, having been repealed out of existence, 83 % of them with their
+internal tree reconstructed. Repeals and renumbers are applied as temporal operations, with 881
+aliases so historical citations still resolve. See
+[docs/11 — Amendment extraction](docs/11-amendment-extraction.md).
 
 Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09 — read
 [docs/10 — Phase 0 findings](docs/10-phase0-findings.md) alongside them.

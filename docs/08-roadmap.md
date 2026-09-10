@@ -91,8 +91,12 @@ snapshot sha256. This is the phase that makes the database bitemporal rather tha
 - ✅ Repeals and renumbers applied as temporal operations (conservatively — see
   [docs/11 §11.6](11-amendment-extraction.md)), plus 12 381 provisions recovered that no longer
   exist in current law.
-- ⏭ Reconstruct historical *structure* by replaying amendments forward from each act's promulgated
-  text, so sub-paragraph amendments attach exactly and recovered provisions gain a parent.
+- ✅ Historical *structure* recovered — not by replaying from promulgated text (Lovtidend starts in
+  2001, so most originals do not exist) but by reading the ledd/punkt structure carried inside each
+  whole-paragraph replacement. Exact attachments 32 205 → 67 617; recovered provisions 12 381 →
+  30 677, 83 % with a parent.
+- ⏭ Place the 21 245 paragraph-level attachments that replacement text cannot reach; triage the 971
+  past repeals on provisions still present.
 - Populate `text_known = false` intervals honestly rather than interpolating.
 - Stortinget enrichment: `enactedBy` edges.
 - Query API ([07](07-query-surface.md)).
