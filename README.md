@@ -14,8 +14,16 @@ sha256 of a specific file fetched on a specific night.
 
 ## Status
 
-Planning. This repository currently contains the design only — no code yet. Start at
-[`docs/01-sources.md`](docs/01-sources.md) and read forward.
+**Historical database built and loaded.** The current-law slice in [`data/`](data) is parsed,
+extracted and loaded into a working bitemporal store: 5 869 documents → 756 878 provisions,
+92 536 change events, 25 185 edges. Point-in-time queries along both axes work today.
+
+❗ **Norsk Lovtidend is not yet ingested** — the Lovdata hosts are refused by this environment's
+egress policy, so it has to be added manually. What that unlocks is quantified in
+[docs/10 §10.5](docs/10-phase0-findings.md#105--the-gap-norsk-lovtidend).
+
+Phase 0 reconnaissance corrected several field-level assumptions in docs 01–09 — read
+[docs/10 — Phase 0 findings](docs/10-phase0-findings.md) alongside them.
 
 ## The plan
 
@@ -30,6 +38,7 @@ Planning. This repository currently contains the design only — no code yet. St
 | [07 — Query surface](docs/07-query-surface.md) | `as-of` queries, document assembly, the API |
 | [08 — Roadmap](docs/08-roadmap.md) | Six phases with acceptance criteria |
 | [09 — Risks](docs/09-risks.md) | Pitfalls, legal caveats, open questions |
+| [10 — Phase 0 findings](docs/10-phase0-findings.md) | ❗ What the real data shows, and which earlier claims it disproves |
 
 The DDL and query functions in docs 04 and 07 are also shipped as runnable files under
 [`schema/`](schema/), verified against PostgreSQL 16 — see [Verification](#verification) below.
@@ -53,6 +62,31 @@ So: **footnotes and Lovtidend supply valid time; snapshots supply transaction ti
 the referee that proves the other two are complete.** Every text change must be explained by at
 least one extracted change event — an unexplained change blocks promotion and lands in a review
 queue. That single invariant is what turns a scraper into a database you can testify from.
+
+## Building the historical database
+
+```bash
+mkdir -p /tmp/slice && for f in data/*.tar.bz2; do tar -xjf "$f" -C /tmp/slice; done
+python3 tools/recon.py  /tmp/slice                 # survey the format
+python3 tools/lovdata.py /tmp/slice /tmp/parsed    # -> works/provisions/events/edges JSONL
+createdb grunnmur && psql -d grunnmur -f schema/001_init.sql -f schema/010_functions.sql
+python3 tools/load.py "dbname=grunnmur" /tmp/parsed data
+psql -d grunnmur -f schema/020_reconstruct.sql     # known-but-unknown-text intervals
+```
+
+Parse takes ~90 seconds for 5 869 documents, load ~2 minutes, resulting database ~1.1 GB.
+
+```sql
+-- arbeidsmiljøloven § 14-9, as it stood on four dates
+select pv.valid,
+       case when pv.text_known then left(tb.plain, 60)
+            else '<in force; wording not held>' end
+  from provision p
+  join provision_version pv using (provision_id)
+  left join text_blob tb on tb.sha256 = pv.text_sha256
+ where p.logical_key = 'lov/2005-06-17-62/§14-9' and pv.tx @> now()
+ order by lower(pv.valid);
+```
 
 ## Verification
 

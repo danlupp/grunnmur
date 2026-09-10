@@ -50,7 +50,9 @@ create table evidence (
     evidence_id bigserial primary key,
     snapshot_id bigint      not null references snapshot,
     method      text        not null   -- footnote0-grammar|lovtidend|snapshot-diff|stortinget|manual
-        check (method in ('footnote0-grammar','lovtidend','snapshot-diff','stortinget','llm-assist','manual')),
+        check (method in ('changesToParent','basedOn','changesToDocuments','lovdata-snapshot',
+                          'reconstruction','lovtidend','snapshot-diff','stortinget',
+                          'llm-assist','manual')),
     locator     text,                  -- file path + xpath/absoluteaddress inside the snapshot
     raw_excerpt text,                  -- the literal source string, for audit
     confidence  numeric(3,2) not null check (confidence between 0 and 1),
@@ -69,10 +71,16 @@ create table work (
     work_id      text primary key,         -- 'LOV-2005-06-17-62', 'FOR-2017-12-19-2286'
     doc_type     text not null
         check (doc_type in ('lov','sentral_forskrift','endringslov','endringsforskrift',
-                            'instruks','delegering','stortingsvedtak')),
+                            'instruks','delegering','stortingsvedtak','ukjent')),
     enacted_on   date,
     official_no  integer,
     eli_uri      text,
+    published_on date,
+    last_corrected date,                -- 'Siste rettelse'; a rettelse, not an amendment
+    -- True for a work we know only because something cites it. Change acts are
+    -- consumed into the consolidated text and never appear in the current-law
+    -- dump, so most cited works are stubs until Lovtidend is ingested.
+    is_stub      boolean not null default false,
     first_seen   bigint not null references snapshot,
     last_seen    bigint not null references snapshot
 );
@@ -81,6 +89,7 @@ create table work (
 create table work_state (
     work_state_id bigserial primary key,
     work_id       text      not null references work,
+    language      text      not null default 'nb',   -- 'nb' | 'nn'; see provision.language
     valid         daterange not null,
     tx            tstzrange not null,
     title         text,
@@ -89,7 +98,7 @@ create table work_state (
     in_force      boolean   not null,
     repealed_by   text      references work,
     evidence_id   bigint    not null references evidence,
-    exclude using gist (work_id with =, valid with &&, tx with &&)
+    exclude using gist (work_id with =, language with =, valid with &&, tx with &&)
 );
 ```
 
@@ -103,10 +112,15 @@ may overlap in **both** axes simultaneously. Overlapping in one is normal and re
 create table provision (
     provision_id bigserial primary key,
     work_id      text not null references work,
-    logical_key  text not null,     -- 'kap:5/§:5-3/ledd:2'  — see docs/03 §3.2
+    -- A work can have parallel language expressions (Grunnloven is published
+    -- in bokmål and nynorsk under ONE work id, with identical Lovdata keys),
+    -- so language is part of provision identity. ELI carries it the same way.
+    language     text not null default 'nb',
+    logical_key  text not null,     -- 'lov/2015-04-10-17/§20-1/ledd/1/bokstav/a'
     level        text not null
-        check (level in ('del','kapittel','paragraf','ledd','punktum','bokstav','vedlegg')),
-    unique (work_id, logical_key)
+        check (level in ('del','kapittel','paragraf','ledd','punkt','punktum',
+                         'bokstav','seksjon','vedlegg')),
+    unique (work_id, language, logical_key)
 );
 
 -- Alias table so historical citations to a renumbered provision still resolve.
@@ -135,7 +149,7 @@ create table provision_version (
     designator      text,              -- '§ 5-3'
     heading         text,
     text_sha256     bytea     references text_blob,   -- null when event_known but not text_known
-    absoluteaddress text,              -- per-snapshot locator; informational only
+    element_id      text,              -- per-snapshot anchor ('paragraf-6'); UNSTABLE, informational only
     status          text      not null
         check (status in ('in_force','not_yet_in_force','repealed','renumbered','reserved')),
     text_known      boolean   not null default true,
@@ -195,8 +209,14 @@ create table change_event (
     operation       text   not null
         check (operation in ('insert','amend','repeal','renumber','replace_act','correct')),
     kunngjort_on    date,
-    in_force_on     date,                        -- null => 'fra den tid Kongen bestemmer'
-    in_force_source text,                        -- 'res. 17 juni 2005 nr. 603'
+    in_force_on     date,                        -- null => not stated in the annotation
+    -- Lower bound for events that name a changing work but state no date: the
+    -- change cannot predate that work. Measured against 59,050 events that DO
+    -- state a date, the median gap is 22 days and p95 is 560, so this is a
+    -- bound to query with, never a date to display as fact.
+    in_force_earliest date,
+    in_force_note   text,                        -- 'kongen_bestemmer' | 'straks' | 'virkningstidspunkt'
+    in_force_source text                references work,
     retroactive     boolean not null default false,
     state           text    not null
         check (state in ('pending','applied','conflict','rejected')),

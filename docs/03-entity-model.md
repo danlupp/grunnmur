@@ -22,8 +22,13 @@ Work          LOV-2005-06-17-62                  the act as an abstract thing; i
 
 ## 3.2 Identity — the trap worth ten pages
 
-Lovdata's `data-absoluteaddress` is an **ordinal** path: `/chapter/12` for a chapter *displayed* as
-"Chapter 10", because chapters 8A and 2-1 consumed ordinals. This has a fatal consequence:
+> ❗ **Measured correction.** `data-absoluteaddress` does not exist in the real dataset; the
+> ordinal path lives on the `id` attribute, and Lovdata *also* supplies a stable key
+> (`data-lovdata-URL`) which we now use directly as `logical_key`. The hazard below is real and was
+> confirmed — it simply lands on `id`. See [docs/10 §10.1](10-phase0-findings.md).
+
+Lovdata's positional anchor is an **ordinal** path: `paragraf-6` for a paragraph *displayed* as
+"§ 5a", because § 5 consumed the previous ordinal. This has a fatal consequence:
 
 > Inserting `§ 3a` shifts the absolute address of every later paragraph in the act.
 
@@ -35,8 +40,15 @@ would be the defining bug of the project.
 
 | Key | Example | Stability | Role |
 | --- | --- | --- | --- |
-| `logical_key` | `kap:5/§:5-3/ledd:2` | Stable across amendments | **Identity.** Foreign keys point here |
-| `absoluteaddress` | `/chapter/5/paragraph/17/section/2/` | Per-snapshot | Locator only; a versioned attribute |
+| `logical_key` | `lov/2016-06-17-73/§5a/ledd/2` | Stable across amendments | **Identity.** Foreign keys point here |
+| `element_id` | `paragraf-6` | Per-snapshot | Locator only; a versioned attribute |
+
+❗ `logical_key` is **not derived** — it is Lovdata's own `data-lovdata-URL`, normalised into the
+`data-change-part` idiom, so our identifiers and Lovdata's agree by construction. But that key is
+stable without being *unique*: 4 089 keys collide where a regulation reproduces a convention and
+its protocol, and are disambiguated by the nearest ancestor's own Lovdata URL. Provision identity
+also carries a **language**, because Grunnloven ships as bokmål and nynorsk under one work id with
+identical keys.
 
 `logical_key` is derived from the *printed designators* (§ number, ledd number, letter), normalised:
 lowercase, non-breaking spaces stripped, `§ 5-3` → `5-3`, roman numerals folded to arabic with the

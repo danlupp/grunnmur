@@ -5,7 +5,14 @@ is the point: each is a check on the other.
 
 ## 6.1 Footnote-0 annotations
 
-Lovdata places a footnote 0 directly beneath each paragraph carrying that paragraph's change
+> ❗ **Measured correction.** These annotations are `article.changesToParent`, not "footnote 0",
+> and they are semi-structured: the changing act is already an `<a href>`, so only the
+> entry-into-force clause needs grammar parsing. Implemented in
+> [`tools/lovdata.py`](../tools/lovdata.py); results in [docs/10 §10.3](10-phase0-findings.md).
+> Three unanticipated forms — nynorsk verbs, mixed operations within one annotation, and fiscal
+> effect clauses — are documented there.
+
+Lovdata places a change annotation directly beneath each provision carrying its change
 history. These strings are highly formulaic and reach back decades — considerably further than
 Lovtidend's 2001 horizon. They are the single highest-value extraction target in the project.
 
@@ -127,7 +134,8 @@ Separate pass over the parsed text, producing `edge` rows of kind `cites`.
 
 Track these per run and alert on regressions; they are the health of the whole system:
 
-- **Footnote parse rate** — target > 99 %. The residue is your grammar backlog.
+- **Annotation parse rate** — measured **99.8 %** of events name a changing act; exactly one event
+  of 92 536 carries no temporal information at all.
 - **Unexplained change rate** — target 0. Anything above it is blocked work sitting in review.
 - **Reference resolution rate** — track by kind; internal should approach 100 %, cross-act lower.
 - **Review queue depth and age** — if this grows without bound the pipeline is not actually

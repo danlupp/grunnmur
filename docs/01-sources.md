@@ -20,10 +20,12 @@ Documented at `https://api.lovdata.no/xmldocs`; Swagger at `https://api.lovdata.
 - Consolidated current text of every act and central regulation.
 - Structure: `article class=legalArticle` (paragraf), `article class=legalP` (ledd),
   `article class=footnote`, plus chapters and parts.
-- `data-absoluteaddress` on each element, e.g. `/chapter/1/paragraph/1/section/1/`, giving every
-  element an addressable ordinal path.
-- **Footnote 0** directly beneath each paragraph: the change history of that paragraph. This is
-  the richest free source of valid-time evidence in existence for Norwegian law.
+- ❗ `data-lovdata-URL` on each element, e.g. `SF/forskrift/2000-07-06-727/§5a` — a **stable,
+  designator-based key**. (`data-absoluteaddress`, which Lovdata's published documentation
+  describes, does **not** occur in this dataset. See [docs/10 §10.1](10-phase0-findings.md).)
+- ❗ **`article.changesToParent`** beneath each provision: its change history — 42 161 of them.
+  Not "footnote 0", and semi-structured: the changing act is already an `<a href>`. This is the
+  richest free source of valid-time evidence in existence for Norwegian law.
 - Document metadata: title, short title, date, number, ministry, and — for regulations —
   the *hjemmel* (legal basis).
 
@@ -36,10 +38,10 @@ Documented at `https://api.lovdata.no/xmldocs`; Swagger at `https://api.lovdata.
 - Court decisions and preparatory works (*forarbeider*).
 - Any change feed or "what changed last night" endpoint. We must compute it.
 
-> **Egress note:** `api.lovdata.no` was blocked by this session's network policy, so the exact
-> XML element inventory below is drawn from Lovdata's published documentation rather than from a
-> downloaded sample. Phase 0 of the [roadmap](08-roadmap.md) is a schema-discovery spike against a
-> real tarball; expect small corrections to element and attribute names, not to the architecture.
+> **Phase 0 has run.** The element inventory above is now measured against the real slice in
+> `data/`, not taken from Lovdata's published documentation — which turned out to describe a
+> different shape. The architecture held; several field-level claims did not. See
+> [docs/10 — Phase 0 findings](10-phase0-findings.md).
 
 ## 1.2 Norsk Lovtidend, Avdeling I (change events)
 
@@ -55,6 +57,11 @@ first. Published by Lovdata on behalf of the Ministry of Justice.
 **Gives us** the authoritative *change acts* themselves (endringslover, endringsforskrifter):
 promulgation date, entry-into-force text, and the operative instructions ("I lov 17. juni 2005
 nr. 62 gjøres følgende endringer: § 5-3 andre ledd skal lyde: ...").
+
+> ❗ **Not yet obtained.** `api.lovdata.no`, `lovdata.no` and `data.norge.no` are all refused by
+> this environment's egress policy. Lovtidend must be added manually. Its absence is quantified in
+> [docs/10 §10.5](10-phase0-findings.md#105--the-gap-norsk-lovtidend): only 10.5 % of the works
+> named in change events are present in the current-law slice.
 
 **Does not give us** anything before 2001. Pre-2001 valid time depends entirely on footnote-0
 annotations, and pre-2001 *text* is largely unrecoverable from free sources — we will know **that**

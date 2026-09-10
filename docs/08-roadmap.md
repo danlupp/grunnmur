@@ -3,6 +3,11 @@
 Six phases. Each has an acceptance criterion that is a *demonstration*, not a checkbox — if you
 cannot show the thing working, the phase is not done.
 
+> **Where this actually stands.** The user supplied a data slice directly, so the work ran
+> Phase 0 → 3 → 4 rather than in order: the historical database is built and queryable, while the
+> nightly fetch (Phase 1) and snapshot diffing (Phase 2) are still to do. That inverts the ordering
+> principle below, which remains the right advice for the *nightly* pipeline.
+
 Ordering principle: get the transaction-time spine correct and boringly reliable before attempting
 any valid-time reconstruction. Snapshots accumulate value from the day you start collecting them
 and cannot be back-collected; reconstruction can be redone at leisure. **If you do nothing else
@@ -10,7 +15,7 @@ this month, start the nightly fetch.**
 
 ---
 
-## Phase 0 — Reconnaissance (days)
+## Phase 0 — Reconnaissance ✅ **done** — [findings](10-phase0-findings.md)
 
 Confirm the assumptions this plan rests on, against real bytes.
 
@@ -27,7 +32,7 @@ Confirm the assumptions this plan rests on, against real bytes.
 the architecture. Resolve the egress block on `api.lovdata.no` first — it is the only hard blocker
 in the plan.
 
-## Phase 1 — Snapshot spine (1–2 weeks)
+## Phase 1 — Snapshot spine — *parse done, nightly fetch not started*
 
 Stages 0–2. No temporal reasoning at all.
 
@@ -38,7 +43,7 @@ Stages 0–2. No temporal reasoning at all.
 **Accept when:** the job has run unattended for seven consecutive nights; a 304 produces an
 observation and no new content rows; re-running any night is a verified no-op.
 
-## Phase 2 — Identity and diff (2–3 weeks)
+## Phase 2 — Identity and diff — *identity done, diff not started*
 
 Stages 3–4 — the technical heart of the project.
 
@@ -51,7 +56,7 @@ Stages 3–4 — the technical heart of the project.
 provisions that actually changed and nothing else. The phantom-diff rate from formatting churn is
 the metric that decides whether canonicalisation is finished — target zero.
 
-## Phase 3 — Change extraction (3–4 weeks)
+## Phase 3 — Change extraction ✅ **done for `changesToParent`** (99.8 %); Lovtidend blocked
 
 Stage 5 — [06](06-change-extraction.md).
 
@@ -63,7 +68,7 @@ Stage 5 — [06](06-change-extraction.md).
 **Accept when:** footnote parse rate exceeds 99 % across the whole corpus, and the residue is
 triaged rather than merely counted.
 
-## Phase 4 — Bitemporal store (3–4 weeks)
+## Phase 4 — Bitemporal store ✅ **loaded and queryable**
 
 Stages 6–8 and the schema in [04](04-schema.md).
 

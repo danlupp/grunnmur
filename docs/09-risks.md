@@ -21,9 +21,10 @@ schema validation in stage 7 with unknown elements as warnings rather than silen
 bytes forever so any night can be re-parsed under a corrected parser. This is the standing argument
 for the retention policy.
 
-**Ordinal instability of `absoluteaddress`.** Covered at length in
-[03 §3.2](03-entity-model.md#32-identity--the-trap-worth-ten-pages). If this plan has one
-defining bug risk, it is here. Phase 0 should confirm it empirically before any code depends on it.
+**Ordinal instability of the positional anchor.** ✅ Confirmed empirically in Phase 0 — and
+sidestepped, because Lovdata supplies a stable key we use instead. The residual risk moved: that
+stable key is **not unique**, which the exclusion constraint caught during loading. See
+[docs/10 §10.1](10-phase0-findings.md).
 
 **Renumbering cascades.** A wholesale renumbering of an act makes the diff explode and defeats
 `logical_key` matching. Mitigation: similarity-based move detection, alias rows, and human review
@@ -85,7 +86,11 @@ User-Agent.
 7. Is there a stable identifier linking a Lovtidend change act to the consolidated work it amends,
    or must it be derived from the date-and-number citation?
 
-**Blocker:** `api.lovdata.no` is blocked by this session's network egress policy, so every answer
-above is drawn from Lovdata's published documentation rather than from inspected data. All seven
-questions are answerable in an afternoon with unrestricted network access, and none of them
-threatens the architecture — they affect effort estimates and field-level details.
+**Answered.** Six of the seven were resolved by measurement against the real slice — see
+[docs/10 §10.2](10-phase0-findings.md#102-the-seven-open-questions-answered). Five came back more
+favourable than assumed (hjemmel, future-dating and repeal are all directly observable).
+
+**Still blocked:** question 6. `api.lovdata.no`, `lovdata.no` and `data.norge.no` are refused by
+this environment's egress policy (403 on CONNECT), so Norsk Lovtidend has not been inspected or
+ingested. It must be added manually. What it would unlock is quantified in
+[docs/10 §10.5](10-phase0-findings.md#105--the-gap-norsk-lovtidend).
